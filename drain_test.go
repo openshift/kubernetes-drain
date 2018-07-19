@@ -94,20 +94,18 @@ func TestCordon(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			options := &DrainOptions{
-				Client: fake.NewSimpleClientset(&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:              "node",
-						CreationTimestamp: metav1.Time{Time: time.Now()},
-					},
-					Status: corev1.NodeStatus{},
-					Spec: corev1.NodeSpec{
-						Unschedulable: !test.schedulable,
-					},
-				}),
-			}
+			client := fake.NewSimpleClientset(&corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "node",
+					CreationTimestamp: metav1.Time{Time: time.Now()},
+				},
+				Status: corev1.NodeStatus{},
+				Spec: corev1.NodeSpec{
+					Unschedulable: !test.schedulable,
+				},
+			}).CoreV1().Nodes()
 
-			err := options.GetNodes([]string{test.node})
+			nodes, err := GetNodes(client, []string{test.node}, "")
 			if err != nil {
 				if len(test.expectedGetNodesError) == 0 {
 					t.Fatal(err)
@@ -119,18 +117,18 @@ func TestCordon(t *testing.T) {
 				t.Fatalf("expected error %q", test.expectedGetNodesError)
 			}
 
-			node := options.nodes[0]
+			node := nodes[0]
 
 			if test.cordon {
-				err = options.Cordon(node)
+				err = Cordon(client, node, nil)
 			} else {
-				err = options.Uncordon(node)
+				err = Uncordon(client, node, nil)
 			}
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			node, err = options.Client.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
+			node, err = client.Get(node.Name, metav1.GetOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -389,7 +387,7 @@ func TestDrain(t *testing.T) {
 			},
 			logEntries: []string{
 				"cordoned node \"node\"",
-				"deleted pod \"bar\"",
+				"pod \"bar\" removed (deleted)",
 				"drained node \"node\"",
 			},
 		},
@@ -407,7 +405,7 @@ func TestDrain(t *testing.T) {
 				},
 				logEntries: []string{
 					"cordoned node \"node\"",
-					"evicted pod \"bar\"",
+					"pod \"bar\" removed (evicted)",
 					"drained node \"node\"",
 				},
 			},*/
@@ -446,7 +444,7 @@ func TestDrain(t *testing.T) {
 			logEntries: []string{
 				"cordoned node \"node\"",
 				fmt.Sprintf("%s: bar", kUnmanagedWarning),
-				"deleted pod \"bar\"",
+				"pod \"bar\" removed (deleted)",
 				"drained node \"node\"",
 			},
 		},
@@ -498,7 +496,7 @@ func TestDrain(t *testing.T) {
 			},
 			logEntries: []string{
 				"cordoned node \"node\"",
-				"deleted pod \"bar\"",
+				"pod \"bar\" removed (deleted)",
 				"drained node \"node\"",
 			},
 		},
@@ -514,7 +512,7 @@ func TestDrain(t *testing.T) {
 			},
 			logEntries: []string{
 				"cordoned node \"node\"",
-				"deleted pod \"bar\"",
+				"pod \"bar\" removed (deleted)",
 				"drained node \"node\"",
 			},
 		},
@@ -541,7 +539,7 @@ func TestDrain(t *testing.T) {
 			logEntries: []string{
 				"cordoned node \"node\"",
 				fmt.Sprintf("%s: bar", kUnmanagedWarning),
-				"deleted pod \"bar\"",
+				"pod \"bar\" removed (deleted)",
 				"drained node \"node\"",
 			},
 		},
@@ -571,7 +569,7 @@ func TestDrain(t *testing.T) {
 			logEntries: []string{
 				"cordoned node \"node\"",
 				fmt.Sprintf("%s: bar; %s: bar", kLocalStorageWarning, kUnmanagedWarning),
-				"deleted pod \"bar\"",
+				"pod \"bar\" removed (deleted)",
 				"drained node \"node\"",
 			},
 		},
@@ -596,16 +594,16 @@ func TestDrain(t *testing.T) {
 				t.Error("logEntries set despite being masked by expectedDrainError")
 			}
 
-			test.options.Client = fake.NewSimpleClientset(test.objects...)
+			client := fake.NewSimpleClientset(test.objects...)
 			logger := capture.New()
 			test.options.Logger = logger
 
-			err := test.options.GetNodes(test.nodes)
+			nodes, err := GetNodes(client.CoreV1().Nodes(), test.nodes, "")
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			err = test.options.Drain()
+			err = Drain(client, nodes, test.options)
 			if err != nil {
 				if len(test.expectedDrainError) == 0 {
 					t.Fatal(err)
@@ -700,11 +698,8 @@ func TestDeletePods(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			options := &DrainOptions{
-				Client: fake.NewSimpleClientset(),
-			}
 			_, pods := createPods(false)
-			pendingPods, err := options.waitForDelete(pods, test.interval, test.timeout, false, test.getPodFn)
+			pendingPods, err := waitForDelete(pods, test.interval, test.timeout, false, nil, test.getPodFn)
 
 			if test.expectError {
 				if err == nil {
