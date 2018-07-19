@@ -302,7 +302,7 @@ func (o *DrainOptions) localStorageFilter(pod corev1.Pod) (bool, *warning, *fata
 // Map of status message to a list of pod names having that status.
 type podStatuses map[string][]string
 
-func (ps podStatuses) Message() string {
+func (ps podStatuses) message() string {
 	msgs := []string{}
 
 	for key, pods := range ps {
@@ -355,10 +355,10 @@ func (o *DrainOptions) getPodsForDeletion(node *corev1.Node) (pods []corev1.Pod,
 	}
 
 	if len(fs) > 0 {
-		return []corev1.Pod{}, errors.New(fs.Message())
+		return []corev1.Pod{}, errors.New(fs.message())
 	}
 	if len(ws) > 0 {
-		o.log(ws.Message())
+		o.log(ws.message())
 	}
 	return pods, nil
 }
