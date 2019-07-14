@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +33,7 @@ import (
 	batch "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	extensions "k8s.io/api/extensions/v1beta1"
+	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -205,13 +205,13 @@ func TestDrain(t *testing.T) {
 		},
 	}
 
-	ds := &extensions.DaemonSet{
+	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "ds",
 			Namespace:         "default",
 			CreationTimestamp: metav1.Time{Time: time.Now()},
 		},
-		Spec: extensions.DaemonSetSpec{
+		Spec: appsv1.DaemonSetSpec{
 			Selector: &metav1.LabelSelector{MatchLabels: labels},
 		},
 	}
@@ -224,7 +224,7 @@ func TestDrain(t *testing.T) {
 			Labels:            labels,
 			OwnerReferences: []metav1.OwnerReference{
 				{
-					APIVersion:         "extensions/v1beta1",
+					APIVersion:         "appsv1/v1",
 					Kind:               "DaemonSet",
 					Name:               "ds",
 					BlockOwnerDeletion: boolptr(true),
@@ -245,7 +245,7 @@ func TestDrain(t *testing.T) {
 			Labels:            labels,
 			OwnerReferences: []metav1.OwnerReference{
 				{
-					APIVersion:         "extensions/v1beta1",
+					APIVersion:         "apps/v1",
 					Kind:               "DaemonSet",
 					Name:               "ds",
 					BlockOwnerDeletion: boolptr(true),
@@ -749,15 +749,6 @@ func createPods(ifCreateNewPods bool) (map[string]corev1.Pod, []corev1.Pod) {
 
 type MyReq struct {
 	Request *http.Request
-}
-
-func (m *MyReq) isFor(method string, path string) bool {
-	req := m.Request
-
-	return method == req.Method && (req.URL.Path == path ||
-		req.URL.Path == strings.Join([]string{"/api/v1", path}, "") ||
-		req.URL.Path == strings.Join([]string{"/apis/extensions/v1beta1", path}, "") ||
-		req.URL.Path == strings.Join([]string{"/apis/batch/v1", path}, ""))
 }
 
 func defaultHeader() http.Header {

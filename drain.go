@@ -38,7 +38,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	typedextensionsv1beta1 "k8s.io/client-go/kubernetes/typed/extensions/v1beta1"
+	typedappsv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	typedpolicyv1beta1 "k8s.io/client-go/kubernetes/typed/policy/v1beta1"
 )
 
@@ -238,7 +238,7 @@ func (o *DrainOptions) unreplicatedFilter(pod corev1.Pod) (bool, *warning, *fata
 }
 
 type DaemonSetFilterOptions struct {
-	client typedextensionsv1beta1.ExtensionsV1beta1Interface
+	client typedappsv1.AppsV1Interface
 	force bool
 	ignoreDaemonSets bool
 }
@@ -328,7 +328,7 @@ func getPodsForDeletion(client kubernetes.Interface, node *corev1.Node, options 
 	fs := podStatuses{}
 
 	daemonSetOptions := &DaemonSetFilterOptions{
-		client: client.ExtensionsV1beta1(),
+		client: client.AppsV1(),
 		force: options.Force,
 		ignoreDaemonSets: options.IgnoreDaemonsets,
 	}
