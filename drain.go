@@ -209,7 +209,7 @@ func DeleteOrEvictPods(client kubernetes.Interface, node *corev1.Node, options *
 		}
 		pendingNames := make([]string, len(pendingPods))
 		for i, pendingPod := range pendingPods {
-			pendingNames[i] = pendingPod.Name
+			pendingNames[i] = fmt.Sprintf("%s/%s", pendingPod.Namespace, pendingPod.Name)
 		}
 		sort.Strings(pendingNames)
 		logf(options.Logger, "failed to evict pods from node %q (pending pods: %s): %v", node.Name, strings.Join(pendingNames, ","), err)
@@ -417,6 +417,7 @@ func evictPods(client typedpolicyv1beta1.PolicyV1beta1Interface, pods []corev1.P
 	var wg sync.WaitGroup
 
 	for _, pod := range pods {
+		podName := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
 		wg.Add(1)
 		go func(pod corev1.Pod, returnCh chan error, stopCh chan struct{}) {
 			defer wg.Done()
@@ -431,14 +432,14 @@ func evictPods(client typedpolicyv1beta1.PolicyV1beta1Interface, pods []corev1.P
 				} else if apierrors.IsTooManyRequests(err) {
 					select {
 					case <-stopCh:
-						logf(options.Logger, "Received channel close for pod %q. Returning!!!", pod.Name)
+						logf(options.Logger, "Received channel close for pod %q. Returning!!!", podName)
 						return
 					default:
-						logf(options.Logger, "error when evicting pod %q (will retry after 5s): %v", pod.Name, err)
+						logf(options.Logger, "error when evicting pod %q (will retry after 5s): %v", podName, err)
 						time.Sleep(5 * time.Second)
 					}
 				} else {
-					returnCh <- fmt.Errorf("error when evicting pod %q: %v", pod.Name, err)
+					returnCh <- fmt.Errorf("error when evicting pod %q: %v", podName, err)
 					return
 				}
 			}
@@ -447,7 +448,7 @@ func evictPods(client typedpolicyv1beta1.PolicyV1beta1Interface, pods []corev1.P
 			if err == nil {
 				returnCh <- nil
 			} else {
-				returnCh <- fmt.Errorf("error when waiting for pod %q terminating: %v", pod.Name, err)
+				returnCh <- fmt.Errorf("error when waiting for pod %q terminating: %v", podName, err)
 			}
 		}(pod, returnCh, stopCh)
 	}
@@ -519,7 +520,7 @@ func waitForDelete(pods []corev1.Pod, interval, timeout time.Duration, usingEvic
 		for i, pod := range pods {
 			p, err := getPodFn(pod.Namespace, pod.Name)
 			if apierrors.IsNotFound(err) || (p != nil && p.ObjectMeta.UID != pod.ObjectMeta.UID) {
-				logf(logger, "pod %q removed (%s)", pod.Name, verbStr)
+				logf(logger, "pod %q removed (%s)", fmt.Sprintf("%s/%s", pod.Namespace, pod.Name), verbStr)
 				continue
 			} else if err != nil {
 				return false, err
