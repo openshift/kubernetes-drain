@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	ctx "context"
 
 	golog "github.com/go-log/log"
 
@@ -109,7 +110,7 @@ func GetNodes(client typedcorev1.NodeInterface, nodes []string, selector string)
 	out = []*corev1.Node{}
 
 	for _, node := range nodes {
-		node, err := client.Get(node, metav1.GetOptions{})
+		node, err := client.Get(ctx.Background(), node, metav1.GetOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -117,7 +118,7 @@ func GetNodes(client typedcorev1.NodeInterface, nodes []string, selector string)
 	}
 
 	if len(selector) > 0 {
-		nodes, err := client.List(metav1.ListOptions{
+		nodes, err := client.List(ctx.Background(), metav1.ListOptions{
 			LabelSelector: selector,
 		})
 		if err != nil {
@@ -257,7 +258,7 @@ func (o *DaemonSetFilterOptions) daemonSetFilter(pod corev1.Pod) (bool, *warning
 		return true, nil, nil
 	}
 
-	if _, err := o.client.DaemonSets(pod.Namespace).Get(controllerRef.Name, metav1.GetOptions{}); err != nil {
+	if _, err := o.client.DaemonSets(pod.Namespace).Get(ctx.Background(), controllerRef.Name, metav1.GetOptions{}); err != nil {
 		// remove orphaned pods with a warning if Force is used
 		if apierrors.IsNotFound(err) && o.force {
 			return true, &warning{err.Error()}, nil
@@ -320,7 +321,7 @@ func getPodsForDeletion(client kubernetes.Interface, node *corev1.Node, options 
 	if options.Selector != nil {
 		listOptions.LabelSelector = options.Selector.String()
 	}
-	podList, err := client.CoreV1().Pods(options.Namespace).List(listOptions)
+	podList, err := client.CoreV1().Pods(options.Namespace).List(ctx.Background(), listOptions)
 	if err != nil {
 		return pods, err
 	}
@@ -385,7 +386,7 @@ func evictPod(client typedpolicyv1beta1.PolicyV1beta1Interface, pod corev1.Pod, 
 		},
 		DeleteOptions: deleteOptions,
 	}
-	return client.Evictions(eviction.Namespace).Evict(eviction)
+	return client.Evictions(eviction.Namespace).Evict(ctx.Background(), eviction)
 }
 
 // deleteOrEvictPods deletes or evicts the pods on the api server
@@ -400,7 +401,7 @@ func deleteOrEvictPods(client kubernetes.Interface, pods []corev1.Pod, options *
 	}
 
 	getPodFn := func(namespace, name string) (*corev1.Pod, error) {
-		return client.CoreV1().Pods(namespace).Get(name, metav1.GetOptions{})
+		return client.CoreV1().Pods(namespace).Get(ctx.Background(), name, metav1.GetOptions{})
 	}
 
 	if len(policyGroupVersion) > 0 {
@@ -491,13 +492,13 @@ func deletePods(client typedcorev1.CoreV1Interface, pods []corev1.Pod, options *
 	} else {
 		globalTimeout = options.Timeout
 	}
-	deleteOptions := &metav1.DeleteOptions{}
+	deleteOptions := metav1.DeleteOptions{}
 	if options.GracePeriodSeconds >= 0 {
 		gracePeriodSeconds := int64(options.GracePeriodSeconds)
 		deleteOptions.GracePeriodSeconds = &gracePeriodSeconds
 	}
 	for _, pod := range pods {
-		err := client.Pods(pod.Namespace).Delete(pod.Name, deleteOptions)
+		err := client.Pods(pod.Namespace).Delete(ctx.Background(), pod.Name, deleteOptions)
 		if err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
@@ -586,7 +587,7 @@ func cordonOrUncordon(client typedcorev1.NodeInterface, node *corev1.Node, logge
 	}
 
 	patch := []byte(fmt.Sprintf("{\"spec\":{\"unschedulable\":%t}}", desired))
-	_, err := client.Patch(node.Name, types.StrategicMergePatchType, patch)
+	_, err := client.Patch(ctx.Background(), node.Name, types.StrategicMergePatchType, patch,metav1.PatchOptions{})
 	if err == nil {
 		verbStr := "cordoned"
 		if !desired {

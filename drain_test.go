@@ -18,6 +18,7 @@ package drain
 
 import (
 	"bytes"
+	ctx "context"
 	"errors"
 	"fmt"
 	"io"
@@ -128,7 +129,7 @@ func TestCordon(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			node, err = client.Get(node.Name, metav1.GetOptions{})
+			node, err = client.Get(ctx.Background(), node.Name, metav1.GetOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
