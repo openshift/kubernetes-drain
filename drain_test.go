@@ -18,6 +18,7 @@ package drain
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -30,10 +31,10 @@ import (
 
 	"github.com/go-log/log/capture"
 
+	appsv1 "k8s.io/api/apps/v1"
 	batch "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	extensions "k8s.io/api/extensions/v1beta1"
-	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -46,6 +47,8 @@ import (
 func boolptr(b bool) *bool { return &b }
 
 func TestCordon(t *testing.T) {
+	ctx := context.Background()
+
 	tests := []struct {
 		description           string
 		node                  string
@@ -105,7 +108,7 @@ func TestCordon(t *testing.T) {
 				},
 			}).CoreV1().Nodes()
 
-			nodes, err := GetNodes(client, []string{test.node}, "")
+			nodes, err := GetNodes(ctx, client, []string{test.node}, "")
 			if err != nil {
 				if len(test.expectedGetNodesError) == 0 {
 					t.Fatal(err)
@@ -120,15 +123,15 @@ func TestCordon(t *testing.T) {
 			node := nodes[0]
 
 			if test.cordon {
-				err = Cordon(client, node, nil)
+				err = Cordon(ctx, client, node, nil)
 			} else {
-				err = Uncordon(client, node, nil)
+				err = Uncordon(ctx, client, node, nil)
 			}
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			node, err = client.Get(node.Name, metav1.GetOptions{})
+			node, err = client.Get(ctx, node.Name, metav1.GetOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -140,6 +143,7 @@ func TestCordon(t *testing.T) {
 }
 
 func TestDrain(t *testing.T) {
+	ctx := context.Background()
 	labels := make(map[string]string)
 	labels["my_key"] = "my_value"
 	/* FIXME: these are not resource.Objects.  How to get them into NewSimpleClientset?
@@ -598,12 +602,12 @@ func TestDrain(t *testing.T) {
 			logger := capture.New()
 			test.options.Logger = logger
 
-			nodes, err := GetNodes(client.CoreV1().Nodes(), test.nodes, "")
+			nodes, err := GetNodes(ctx, client.CoreV1().Nodes(), test.nodes, "")
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			err = Drain(client, nodes, test.options)
+			err = Drain(ctx, client, nodes, test.options)
 			if err != nil {
 				if len(test.expectedDrainError) == 0 {
 					t.Fatal(err)
@@ -729,7 +733,7 @@ func createPods(ifCreateNewPods bool) (map[string]corev1.Pod, []corev1.Pod) {
 	for i := 0; i < 8; i++ {
 		var uid types.UID
 		if ifCreateNewPods {
-			uid = types.UID(i)
+			uid = types.UID(strconv.Itoa(i))
 		} else {
 			uid = types.UID(strconv.Itoa(i) + strconv.Itoa(i))
 		}
